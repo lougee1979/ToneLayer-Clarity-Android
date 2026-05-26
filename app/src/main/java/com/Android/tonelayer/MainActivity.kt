@@ -30,6 +30,7 @@ import java.net.URL
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,8 +40,6 @@ import com.Android.tonelayer.features.clarity.createClarityAnalysis
 import com.Android.tonelayer.features.shared.ClarityGreen
 import com.Android.tonelayer.features.shared.FeatureColors
 import com.Android.tonelayer.features.shared.NeutralGray
-import com.Android.tonelayer.features.shared.ToneLayerBlue
-import com.Android.tonelayer.features.tonelayer.createToneLayerAnalysis
 import com.Android.tonelayer.features.tonelayer.toneLayerProfilePrompt
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +54,8 @@ class MainActivity : ComponentActivity() {
 private const val PREFS_NAME = "tonelayer_clarity_prefs"
 private const val PREF_CLAUDE_API_KEY = "claude_api_key"
 private const val PREF_AI_CONSENT = "ai_processing_consent"
+private const val PREF_READER_LENS = "reader_lens"
+private const val PREF_SHOW_TEACHING = "show_teaching_boxes"
 
 
 enum class NeuroProfile(val displayName: String) {
@@ -73,11 +74,16 @@ enum class RewriteDirection {
 }
 
 enum class RewriteStyle(val buttonLabel: String, val resultTitle: String) {
-    CLEAR("Clarify", "Clearer rewrite"),
-    SHORTER("Shorter", "Shorter rewrite"),
-    WARMER("Warmer", "Warmer rewrite"),
-    DIRECT("Direct", "More direct rewrite"),
-    SOFTER("Soften", "Softer rewrite")
+    CLEAR("Clarify", "ND rewrite"),
+    SHORTER("Shorter", "Shorter ND rewrite"),
+    WARMER("Warmer", "Warmer ND rewrite"),
+    DIRECT("Direct", "Direct ND rewrite"),
+    SOFTER("Soften", "Softer ND rewrite")
+}
+
+fun storedReaderLens(prefs: android.content.SharedPreferences): NeuroProfile {
+    val stored = prefs.getString(PREF_READER_LENS, NeuroProfile.AUTO.name) ?: NeuroProfile.AUTO.name
+    return runCatching { NeuroProfile.valueOf(stored) }.getOrDefault(NeuroProfile.AUTO)
 }
 
 @Composable
@@ -87,24 +93,14 @@ fun ToneLayerApp() {
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE) }
     var apiKey by remember { mutableStateOf(prefs.getString(PREF_CLAUDE_API_KEY, "") ?: "") }
     var aiConsent by remember { mutableStateOf(prefs.getBoolean(PREF_AI_CONSENT, false)) }
+    var showTeachingBoxes by remember { mutableStateOf(prefs.getBoolean(PREF_SHOW_TEACHING, true)) }
     var selectedSection by remember { mutableStateOf(ToneLayerSection.CLARITY) }
-    var toneLayerInput by remember {
-        mutableStateOf(
-            "I know this is a lot but I keep replaying the conversation and I need to explain what I meant because it feels like everything got tangled."
-        )
-    }
     var clarityInput by remember { mutableStateOf("we need to talk") }
-    var toneLayerProfile by remember { mutableStateOf(NeuroProfile.AUTO) }
-    var clarityProfile by remember { mutableStateOf(NeuroProfile.AUTO) }
-    var toneLayerRewriteTitle by remember { mutableStateOf("NT-facing rewrite") }
-    var clarityRewriteTitle by remember { mutableStateOf("ND-facing rewrite") }
-    var toneLayerRewriteText by remember { mutableStateOf("Your NT-facing version will appear here.") }
-    var clarityRewriteText by remember { mutableStateOf("Your ND-facing version will appear here.") }
-    var toneLayerTeachingText by remember { mutableStateOf(createToneLayerAnalysis(toneLayerInput, toneLayerProfile)) }
+    var clarityProfile by remember { mutableStateOf(storedReaderLens(prefs)) }
+    var clarityRewriteTitle by remember { mutableStateOf("ND rewrite") }
+    var clarityRewriteText by remember { mutableStateOf("Your ND rewrite will appear here.") }
     var clarityTeachingText by remember { mutableStateOf(createClarityAnalysis(clarityInput, clarityProfile)) }
-    var isToneLayerRewriting by remember { mutableStateOf(false) }
     var isClarityRewriting by remember { mutableStateOf(false) }
-    var toneLayerStatus by remember { mutableStateOf("") }
     var clarityStatus by remember { mutableStateOf("") }
     val activeColors = selectedSection.featureColors()
 
@@ -112,7 +108,11 @@ fun ToneLayerApp() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(activeColors.surface)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(activeColors.surface, Color.White, activeColors.soft)
+                    )
+                )
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
@@ -132,86 +132,21 @@ fun ToneLayerApp() {
             Spacer(modifier = Modifier.height(16.dp))
 
             when (selectedSection) {
-                ToneLayerSection.TONELAYER -> {
-                    MessageWorkspace(
-                        title = "ToneLayer",
-                        featureColors = ToneLayerBlue,
-                        profileLabel = "Sender Profile",
-                        inputText = toneLayerInput,
-                        selectedProfile = toneLayerProfile,
-                        rewriteTitle = toneLayerRewriteTitle,
-                        rewriteText = toneLayerRewriteText,
-                        teachingTitle = "Translation Notes",
-                        teachingText = toneLayerTeachingText,
-                        status = toneLayerStatus,
-                        isRewriting = isToneLayerRewriting,
-                        onInputChange = {
-                            toneLayerInput = it
-                            toneLayerTeachingText = createToneLayerAnalysis(it, toneLayerProfile)
-                        },
-                        onProfileSelected = {
-                            toneLayerProfile = it
-                            toneLayerTeachingText = createToneLayerAnalysis(toneLayerInput, it)
-                        },
-                        onRewriteSelected = { style ->
-                            val input = toneLayerInput.trim()
-                            if (input.isBlank()) {
-                                toneLayerStatus = "Enter a message first"
-                                return@MessageWorkspace
-                            }
-                            toneLayerRewriteTitle = style.resultTitle
-                            isToneLayerRewriting = true
-                            toneLayerStatus = "Translating for NT readability..."
-                            requestRewrite(
-                                prefs = prefs,
-                                scope = scope,
-                                apiKey = apiKey,
-                                aiConsent = aiConsent,
-                                input = input,
-                                profile = toneLayerProfile,
-                                style = style,
-                                direction = RewriteDirection.ND_TO_NT,
-                                onResult = {
-                                    toneLayerRewriteText = it.rewrite
-                                    toneLayerTeachingText = it.teaching
-                                    isToneLayerRewriting = false
-                                    toneLayerStatus = "Ready"
-                                }
-                            )
-                        },
-                        onCopyRewrite = {
-                            copyToClipboard(context, toneLayerRewriteText)
-                            incrementMetric(prefs, "android.tonelayer.rewrite.copied")
-                            incrementMetric(prefs, "android.tonelayer.rewrite.accepted")
-                            toneLayerStatus = "Copied"
-                        },
-                        onShareRewrite = {
-                            shareText(context, toneLayerRewriteText)
-                            incrementMetric(prefs, "android.tonelayer.rewrite.shared")
-                            incrementMetric(prefs, "android.tonelayer.rewrite.accepted")
-                        }
-                    )
-                }
                 ToneLayerSection.CLARITY -> {
                     MessageWorkspace(
-                        title = "Clarity",
+                        title = "Message Check",
                         featureColors = ClarityGreen,
-                        profileLabel = "Reader Profile",
                         inputText = clarityInput,
-                        selectedProfile = clarityProfile,
                         rewriteTitle = clarityRewriteTitle,
                         rewriteText = clarityRewriteText,
-                        teachingTitle = "Teaching Explanation",
+                        teachingTitle = "Why this lands clearer",
                         teachingText = clarityTeachingText,
+                        showTeachingBoxes = showTeachingBoxes,
                         status = clarityStatus,
                         isRewriting = isClarityRewriting,
                         onInputChange = {
                             clarityInput = it
                             clarityTeachingText = createClarityAnalysis(it, clarityProfile)
-                        },
-                        onProfileSelected = {
-                            clarityProfile = it
-                            clarityTeachingText = createClarityAnalysis(clarityInput, it)
                         },
                         onRewriteSelected = { style ->
                             val input = clarityInput.trim()
@@ -256,6 +191,8 @@ fun ToneLayerApp() {
                     ToneLayerSettings(
                         apiKey = apiKey,
                         aiConsent = aiConsent,
+                        showTeachingBoxes = showTeachingBoxes,
+                        readerLens = clarityProfile,
                         onApiKeyChange = {
                             apiKey = it
                             prefs.edit().putString(PREF_CLAUDE_API_KEY, it.trim()).apply()
@@ -263,6 +200,15 @@ fun ToneLayerApp() {
                         onConsentChange = {
                             aiConsent = it
                             prefs.edit().putBoolean(PREF_AI_CONSENT, it).apply()
+                        },
+                        onTeachingBoxesChange = {
+                            showTeachingBoxes = it
+                            prefs.edit().putBoolean(PREF_SHOW_TEACHING, it).apply()
+                        },
+                        onReaderLensSelected = {
+                            clarityProfile = it
+                            clarityTeachingText = createClarityAnalysis(clarityInput, it)
+                            prefs.edit().putString(PREF_READER_LENS, it.name).apply()
                         },
                         onOpenKeyboardSettings = {
                             openKeyboardSettings(context)
@@ -277,14 +223,12 @@ fun ToneLayerApp() {
 }
 
 enum class ToneLayerSection(val label: String) {
-    TONELAYER("ToneLayer"),
-    CLARITY("Clarity"),
+    CLARITY("ND Clarity"),
     SETTINGS("Settings")
 }
 
 fun ToneLayerSection.featureColors(): FeatureColors {
     return when (this) {
-        ToneLayerSection.TONELAYER -> ToneLayerBlue
         ToneLayerSection.CLARITY -> ClarityGreen
         ToneLayerSection.SETTINGS -> NeutralGray
     }
@@ -294,7 +238,7 @@ fun ToneLayerSection.featureColors(): FeatureColors {
 fun ToneLayerHeader(aiConsent: Boolean, hasApiKey: Boolean, featureColors: FeatureColors) {
     Column {
         Text(
-            text = "ToneLayer Clarity",
+            text = "ND Clarity",
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
             color = featureColors.primary
@@ -315,6 +259,8 @@ fun ToneLayerHeader(aiConsent: Boolean, hasApiKey: Boolean, featureColors: Featu
                 modifier = Modifier.weight(1f)
             )
         }
+        Spacer(modifier = Modifier.height(10.dp))
+        ColorDirectionStrip(featureColors)
     }
 }
 
@@ -334,6 +280,16 @@ fun StatusPill(label: String, value: String, featureColors: FeatureColors, modif
             Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = featureColors.primary)
         }
     }
+}
+
+@Composable
+fun ColorDirectionStrip(featureColors: FeatureColors) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .background(Brush.horizontalGradient(listOf(featureColors.primary, featureColors.secondary)))
+    )
 }
 
 @Composable
@@ -371,17 +327,15 @@ fun ToneLayerSectionSwitch(
 fun MessageWorkspace(
     title: String,
     featureColors: FeatureColors,
-    profileLabel: String,
     inputText: String,
-    selectedProfile: NeuroProfile,
     rewriteTitle: String,
     rewriteText: String,
     teachingTitle: String,
     teachingText: String,
+    showTeachingBoxes: Boolean,
     status: String,
     isRewriting: Boolean,
     onInputChange: (String) -> Unit,
-    onProfileSelected: (NeuroProfile) -> Unit,
     onRewriteSelected: (RewriteStyle) -> Unit,
     onCopyRewrite: () -> Unit,
     onShareRewrite: () -> Unit
@@ -394,16 +348,6 @@ fun MessageWorkspace(
     )
 
     Spacer(modifier = Modifier.height(12.dp))
-
-    Text(text = profileLabel, fontWeight = FontWeight.Bold)
-    Spacer(modifier = Modifier.height(8.dp))
-    ProfileSelector(
-        selectedProfile = selectedProfile,
-        onProfileSelected = onProfileSelected,
-        featureColors = featureColors
-    )
-
-    Spacer(modifier = Modifier.height(20.dp))
 
     OutlinedTextField(
         value = inputText,
@@ -454,14 +398,14 @@ fun MessageWorkspace(
                 Button(
                     onClick = onCopyRewrite,
                     modifier = Modifier.weight(1f),
-                    enabled = rewriteText.isNotBlank() && !rewriteText.startsWith("Your clearer"),
+                    enabled = rewriteText.isNotBlank() && !rewriteText.startsWith("Your "),
                     colors = ButtonDefaults.buttonColors(containerColor = featureColors.primary)
                 ) { Text("Copy") }
                 Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
                     onClick = onShareRewrite,
                     modifier = Modifier.weight(1f),
-                    enabled = rewriteText.isNotBlank() && !rewriteText.startsWith("Your clearer"),
+                    enabled = rewriteText.isNotBlank() && !rewriteText.startsWith("Your "),
                     border = BorderStroke(1.dp, featureColors.outline),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = featureColors.primary)
                 ) { Text("Share") }
@@ -469,26 +413,28 @@ fun MessageWorkspace(
         }
     }
 
-    Spacer(modifier = Modifier.height(24.dp))
+    if (showTeachingBoxes) {
+        Spacer(modifier = Modifier.height(24.dp))
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = featureColors.surface)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = teachingTitle,
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-                color = featureColors.primary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SelectionContainer {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = featureColors.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = teachingText,
-                    fontSize = 17.sp,
-                    lineHeight = 26.sp
+                    text = teachingTitle,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = featureColors.primary
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                SelectionContainer {
+                    Text(
+                        text = teachingText,
+                        fontSize = 17.sp,
+                        lineHeight = 26.sp
+                    )
+                }
             }
         }
     }
@@ -498,8 +444,12 @@ fun MessageWorkspace(
 fun ToneLayerSettings(
     apiKey: String,
     aiConsent: Boolean,
+    showTeachingBoxes: Boolean,
+    readerLens: NeuroProfile,
     onApiKeyChange: (String) -> Unit,
     onConsentChange: (Boolean) -> Unit,
+    onTeachingBoxesChange: (Boolean) -> Unit,
+    onReaderLensSelected: (NeuroProfile) -> Unit,
     onOpenKeyboardSettings: () -> Unit
 ) {
     Text(
@@ -517,13 +467,36 @@ fun ToneLayerSettings(
     Spacer(modifier = Modifier.height(16.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Text("Reader Lens", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Optional private setting for the person you are writing to. Leave this on Auto unless a specific lens helps.",
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ProfileSelector(
+                selectedProfile = readerLens,
+                onProfileSelected = onReaderLensSelected,
+                featureColors = ClarityGreen
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text("Keyboard", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Enable ToneLayer as a keyboard to rewrite selected text from other apps.",
+                "Enable Clarity as a keyboard to rewrite selected text from other apps.",
                 fontSize = 14.sp,
                 lineHeight = 20.sp
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = showTeachingBoxes, onCheckedChange = onTeachingBoxesChange)
+                Text("Show teaching boxes in the app and keyboard.", fontSize = 13.sp)
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onOpenKeyboardSettings,
@@ -551,7 +524,7 @@ fun AndroidSetupCard(
             Text("Privacy + API", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "ToneLayer sends the message text you choose to clarify to the AI provider so it can rewrite it. Do not use private secrets, passwords, or medical record numbers in test messages.",
+                "Clarity sends only the message text you choose to clarify to the AI provider so it can rewrite it. Do not include passwords, secrets, or medical record numbers in test messages.",
                 fontSize = 13.sp,
                 lineHeight = 18.sp
             )
@@ -612,7 +585,7 @@ fun RewriteTools(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Rewrite Tools",
+                text = "ND Rewrite Tools",
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = featureColors.primary
@@ -747,7 +720,7 @@ fun incrementMetric(prefs: android.content.SharedPreferences, key: String, amoun
 
 fun copyToClipboard(context: android.content.Context, text: String) {
     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("ToneLayer rewrite", text))
+    clipboard.setPrimaryClip(ClipData.newPlainText("Clarity rewrite", text))
 }
 
 fun shareText(context: android.content.Context, text: String) {
@@ -788,8 +761,12 @@ fun callClaudeForApp(
             Teaching must explain how the original NT wording could land for ND readers and why the rewrite is safer or clearer.
         """.trimIndent()
     }
+    val assistantName = when (direction) {
+        RewriteDirection.ND_TO_NT -> "ToneLayer"
+        RewriteDirection.NT_TO_ND -> "Clarity"
+    }
     val system = """
-        You are ToneLayer, an AI communication assistant.
+        You are $assistantName, an AI communication assistant.
         Rewrite the user's message into a sendable version.
         Preserve meaning. Do not shame the user. Do not add fake facts.
         Add structure: short paragraphs or bullets only when useful.
