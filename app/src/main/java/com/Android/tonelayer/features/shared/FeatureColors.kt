@@ -14,14 +14,6 @@ data class FeatureColors(
     val outline: Color
 )
 
-val ToneLayerBlue = FeatureColors(
-    primary = Color(0xFF6D4AC8),
-    secondary = Color(0xFF059669),
-    surface = Color(0xFFF4F0FF),
-    soft = Color(0xFFECFDF5),
-    outline = Color(0xFFA7F3D0)
-)
-
 val ClarityGreen = FeatureColors(
     primary = Color(0xFF059669),
     secondary = Color(0xFF6D4AC8),

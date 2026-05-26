@@ -40,7 +40,6 @@ import com.Android.tonelayer.features.clarity.createClarityAnalysis
 import com.Android.tonelayer.features.shared.ClarityGreen
 import com.Android.tonelayer.features.shared.FeatureColors
 import com.Android.tonelayer.features.shared.NeutralGray
-import com.Android.tonelayer.features.tonelayer.toneLayerProfilePrompt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +68,6 @@ enum class NeuroProfile(val displayName: String) {
 }
 
 enum class RewriteDirection {
-    ND_TO_NT,
     NT_TO_ND
 }
 
@@ -738,10 +736,7 @@ fun callClaudeForApp(
     style: RewriteStyle,
     direction: RewriteDirection
 ): AndroidRewriteResult {
-    val profileInstruction = when (direction) {
-        RewriteDirection.ND_TO_NT -> toneLayerProfilePrompt(profile)
-        RewriteDirection.NT_TO_ND -> clarityProfilePrompt(profile)
-    }
+    val profileInstruction = clarityProfilePrompt(profile)
     val styleInstruction = when (style) {
         RewriteStyle.CLEAR -> "Clarify: produce a polished, sendable rewrite with structure."
         RewriteStyle.SHORTER -> "Make Brief: produce a concise rewrite that keeps only the essential point and next step."
@@ -749,24 +744,13 @@ fun callClaudeForApp(
         RewriteStyle.DIRECT -> "Be Direct: produce a direct rewrite with the ask and next step clearly stated, without sounding harsh."
         RewriteStyle.SOFTER -> "Soften: produce a gentle, lower-pressure rewrite."
     }
-    val directionInstruction = when (direction) {
-        RewriteDirection.ND_TO_NT -> """
-            Direction: ToneLayer mode. The sender is neurodivergent and wants the message to land clearly with a neurotypical reader.
-            Translate ND communication patterns into NT-readable structure without erasing meaning, boundaries, or voice.
-            Teaching must explain what was translated for NT expectations, such as main point placement, brevity, emotional regulation, sequencing, or explicit asks.
-        """.trimIndent()
-        RewriteDirection.NT_TO_ND -> """
-            Direction: Clarity mode. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader.
-            Rewrite NT speech so it is less indirect, less socially coded, less threatening, and easier for ND readers to parse.
-            Teaching must explain how the original NT wording could land for ND readers and why the rewrite is safer or clearer.
-        """.trimIndent()
-    }
-    val assistantName = when (direction) {
-        RewriteDirection.ND_TO_NT -> "ToneLayer"
-        RewriteDirection.NT_TO_ND -> "Clarity"
-    }
+    val directionInstruction = """
+        Direction: ND Clarity mode. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader.
+        Rewrite NT speech so it is less indirect, less socially coded, less threatening, and easier for ND readers to parse.
+        Teaching must explain how the original NT wording could land for ND readers and why the rewrite is safer or clearer.
+    """.trimIndent()
     val system = """
-        You are $assistantName, an AI communication assistant.
+        You are ND Clarity, an AI communication assistant.
         Rewrite the user's message into a sendable version.
         Preserve meaning. Do not shame the user. Do not add fake facts.
         Add structure: short paragraphs or bullets only when useful.
@@ -858,7 +842,7 @@ fun createRewriteResult(input: String, profile: NeuroProfile, style: RewriteStyl
     }
 
     val lower = trimmed.lowercase()
-    if (direction == RewriteDirection.NT_TO_ND && (lower == "we need to talk" || lower == "we need to talk.")) {
+    if (lower == "we need to talk" || lower == "we need to talk.") {
         return when (style) {
             RewriteStyle.CLEAR -> "Can we set aside a few minutes to talk about something specific? I do not want to leave this vague or stressful. I would like to explain what is on my mind and agree on next steps."
             RewriteStyle.SHORTER -> "Can we set a time to talk about something specific? I want to be clear and avoid making this feel vague."
@@ -878,10 +862,7 @@ fun createRewriteResult(input: String, profile: NeuroProfile, style: RewriteStyl
         NeuroProfile.AUTO -> "clearer intent, timing, tone, and requested action"
     }
     val brief = trimmed.split(Regex("\\s+")).take(28).joinToString(" ")
-    val directionLabel = when (direction) {
-        RewriteDirection.ND_TO_NT -> "NT-readable version"
-        RewriteDirection.NT_TO_ND -> "ND-clear version"
-    }
+    val directionLabel = "ND-clear version"
 
     return when (style) {
         RewriteStyle.CLEAR -> """
@@ -927,24 +908,15 @@ fun fallbackTeaching(
     direction: RewriteDirection,
     setupOrFailureMessage: String? = null
 ): String {
-    val specificNote = if (direction == RewriteDirection.NT_TO_ND && input.trim().lowercase().removeSuffix(".") == "we need to talk") {
+    val specificNote = if (input.trim().lowercase().removeSuffix(".") == "we need to talk") {
         "The original phrase can create anxiety because it does not say the topic, urgency, emotional intent, or requested action. The rewrite names that a conversation is needed, lowers the threat level, and asks for a concrete time."
     } else {
-        val styleNote = when (direction) {
-            RewriteDirection.ND_TO_NT -> when (style) {
-                RewriteStyle.CLEAR -> "The rewrite keeps the sender's meaning but organizes it for NT expectations."
-                RewriteStyle.SHORTER -> "The rewrite reduces processing friction by keeping the main point, need, and next step."
-                RewriteStyle.WARMER -> "The rewrite adds social warmth so the message is less likely to be read as blunt or tense."
-                RewriteStyle.DIRECT -> "The rewrite makes the ask easier for an NT reader to act on."
-                RewriteStyle.SOFTER -> "The rewrite lowers pressure while preserving the original need."
-            }
-            RewriteDirection.NT_TO_ND -> when (style) {
-                RewriteStyle.CLEAR -> "The rewrite makes NT subtext explicit so the ND reader does not have to infer the real point."
-                RewriteStyle.SHORTER -> "The rewrite reduces working-memory load and keeps the requested action easy to find."
-                RewriteStyle.WARMER -> "The rewrite adds reassurance and context so warmth is stated instead of implied."
-                RewriteStyle.DIRECT -> "The rewrite states the topic, request, and timing more concretely."
-                RewriteStyle.SOFTER -> "The rewrite lowers threat signals and avoids open-ended tension."
-            }
+        val styleNote = when (style) {
+            RewriteStyle.CLEAR -> "The rewrite makes NT subtext explicit so the ND reader does not have to infer the real point."
+            RewriteStyle.SHORTER -> "The rewrite reduces working-memory load and keeps the requested action easy to find."
+            RewriteStyle.WARMER -> "The rewrite adds reassurance and context so warmth is stated instead of implied."
+            RewriteStyle.DIRECT -> "The rewrite states the topic, request, and timing more concretely."
+            RewriteStyle.SOFTER -> "The rewrite lowers threat signals and avoids open-ended tension."
         }
         val profileNote = when (profile) {
             NeuroProfile.ADHD -> "It also puts the useful action closer to the front."
