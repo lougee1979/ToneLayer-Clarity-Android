@@ -165,7 +165,7 @@ class ToneLayerKeyboardService : InputMethodService() {
                     NeuroProfile.AUTO,
                     mode.toRewriteStyle(),
                     RewriteDirection.NT_TO_ND,
-                    "Turn on AI processing consent in the ND Clarity app to use live rewrites."
+                    "Turn on AI processing consent in the ToneLayer Clarity app to use live rewrites."
                 ),
                 source
             )
@@ -180,7 +180,7 @@ class ToneLayerKeyboardService : InputMethodService() {
                     NeuroProfile.AUTO,
                     mode.toRewriteStyle(),
                     RewriteDirection.NT_TO_ND,
-                    "Add your Claude API key in the ND Clarity app to use live rewrites."
+                    "Add your Claude API key in the ToneLayer Clarity app to use live rewrites."
                 ),
                 source
             )
@@ -258,7 +258,7 @@ class ToneLayerKeyboardService : InputMethodService() {
             RewriteMode.DIRECT -> "Make the message direct and clear without sounding harsh."
         }
         val system = """
-            You are ND Clarity, a communication assistant. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader. Rewrite the user's message so it is explicit, low-ambiguity, low-threat, and matched to the requested style. Do not shame the sender. Preserve meaning. Return ONLY valid JSON with keys rewrite and teaching. Teaching should explain briefly what was translated for ND readability.
+            You are ToneLayer Clarity, a communication assistant. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader. Rewrite the user's message so it is explicit, low-ambiguity, low-threat, and matched to the requested style. Do not shame the sender. Preserve meaning. Return ONLY valid JSON with keys rewrite and teaching. Teaching should explain briefly what was translated for ND readability.
             Style: $style
         """.trimIndent()
 

@@ -221,7 +221,7 @@ fun ToneLayerApp() {
 }
 
 enum class ToneLayerSection(val label: String) {
-    CLARITY("ND Clarity"),
+    CLARITY("ToneLayer Clarity"),
     SETTINGS("Settings")
 }
 
@@ -236,7 +236,7 @@ fun ToneLayerSection.featureColors(): FeatureColors {
 fun ToneLayerHeader(aiConsent: Boolean, hasApiKey: Boolean, featureColors: FeatureColors) {
     Column {
         Text(
-            text = "ND Clarity",
+            text = "ToneLayer Clarity",
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
             color = featureColors.primary
@@ -745,12 +745,12 @@ fun callClaudeForApp(
         RewriteStyle.SOFTER -> "Soften: produce a gentle, lower-pressure rewrite."
     }
     val directionInstruction = """
-        Direction: ND Clarity mode. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader.
+        Direction: ToneLayer Clarity mode. The sender is neurotypical and wants the message to land clearly with a neurodivergent reader.
         Rewrite NT speech so it is less indirect, less socially coded, less threatening, and easier for ND readers to parse.
         Teaching must explain how the original NT wording could land for ND readers and why the rewrite is safer or clearer.
     """.trimIndent()
     val system = """
-        You are ND Clarity, an AI communication assistant.
+        You are ToneLayer Clarity, an AI communication assistant.
         Rewrite the user's message into a sendable version.
         Preserve meaning. Do not shame the user. Do not add fake facts.
         Add structure: short paragraphs or bullets only when useful.
