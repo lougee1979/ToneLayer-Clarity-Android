@@ -14,6 +14,12 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.Android.tonelayer.features.clarity.ClarityHttpException
+import com.Android.tonelayer.features.clarity.ClarityProfileSelection
+import com.Android.tonelayer.features.clarity.RewriteStyle
+import com.Android.tonelayer.features.clarity.createRewriteResult
+import com.Android.tonelayer.features.clarity.fallbackTeaching
+import com.Android.tonelayer.features.clarity.friendlyRewriteFailure
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -23,10 +29,7 @@ import java.net.URL
 /**
  * QWERTY input method with iOS-style keys, rewrite controls, a rewrite box, and a teaching box.
  */
-private const val PREFS_NAME = "tonelayer_clarity_prefs"
 private const val PREF_CLAUDE_API_KEY = "claude_api_key"
-private const val PREF_AI_CONSENT = "ai_processing_consent"
-private const val PREF_SHOW_TEACHING = "show_teaching_boxes"
 private val clarityGreen = Color.rgb(5, 150, 105)
 private val clarityPurple = Color.rgb(109, 74, 200)
 private val clarityGreenSoft = Color.rgb(236, 253, 245)
@@ -158,13 +161,12 @@ class ToneLayerKeyboardService : InputMethodService() {
         val apiKey = prefs.getString(PREF_CLAUDE_API_KEY, "").orEmpty().trim()
         val consent = prefs.getBoolean(PREF_AI_CONSENT, false)
         if (!consent) {
-            latestRewrite = createRewriteResult(source, NeuroProfile.AUTO, mode.toRewriteStyle(), RewriteDirection.NT_TO_ND)
+            latestRewrite = createRewriteResult(source, ClarityProfileSelection(), mode.toRewriteStyle())
             latestTeaching = appendLongMessageCheck(
                 fallbackTeaching(
                     source,
-                    NeuroProfile.AUTO,
+                    ClarityProfileSelection(),
                     mode.toRewriteStyle(),
-                    RewriteDirection.NT_TO_ND,
                     "Turn on AI processing consent in the ToneLayer Clarity app to use live rewrites."
                 ),
                 source
@@ -173,13 +175,12 @@ class ToneLayerKeyboardService : InputMethodService() {
             return
         }
         if (apiKey.isBlank()) {
-            latestRewrite = createRewriteResult(source, NeuroProfile.AUTO, mode.toRewriteStyle(), RewriteDirection.NT_TO_ND)
+            latestRewrite = createRewriteResult(source, ClarityProfileSelection(), mode.toRewriteStyle())
             latestTeaching = appendLongMessageCheck(
                 fallbackTeaching(
                     source,
-                    NeuroProfile.AUTO,
+                    ClarityProfileSelection(),
                     mode.toRewriteStyle(),
-                    RewriteDirection.NT_TO_ND,
                     "Add your Claude API key in the ToneLayer Clarity app to use live rewrites."
                 ),
                 source
@@ -195,14 +196,13 @@ class ToneLayerKeyboardService : InputMethodService() {
                     latestRewrite = it.first
                     latestTeaching = appendLongMessageCheck(it.second, source)
                 }.onFailure {
-                    latestRewrite = createRewriteResult(source, NeuroProfile.AUTO, mode.toRewriteStyle(), RewriteDirection.NT_TO_ND)
+                    latestRewrite = createRewriteResult(source, ClarityProfileSelection(), mode.toRewriteStyle())
                     latestTeaching = appendLongMessageCheck(
                         fallbackTeaching(
                             source,
-                            NeuroProfile.AUTO,
+                            ClarityProfileSelection(),
                             mode.toRewriteStyle(),
-                            RewriteDirection.NT_TO_ND,
-                            friendlyClaudeFailure(it)
+                            friendlyRewriteFailure(it)
                         ),
                         source
                     )
@@ -233,14 +233,6 @@ class ToneLayerKeyboardService : InputMethodService() {
         latestOriginal = latestRewrite
         latestDeleteCount = latestRewrite.length
         latestUsedSelection = false
-    }
-
-    private fun createRewrite(text: String, mode: RewriteMode): String {
-        return createRewriteResult(text, NeuroProfile.AUTO, mode.toRewriteStyle(), RewriteDirection.NT_TO_ND)
-    }
-
-    private fun createTeaching(text: String, mode: RewriteMode): String {
-        return fallbackTeaching(text, NeuroProfile.AUTO, mode.toRewriteStyle(), RewriteDirection.NT_TO_ND)
     }
 
     private fun longMessageCheck(text: String): String {
@@ -284,7 +276,7 @@ class ToneLayerKeyboardService : InputMethodService() {
         OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
         val response = stream.bufferedReader().use { it.readText() }
-        if (conn.responseCode !in 200..299) throw ClaudeHttpException(conn.responseCode, response)
+        if (conn.responseCode !in 200..299) throw ClarityHttpException(conn.responseCode, response)
         val content = JSONObject(response).getJSONArray("content").getJSONObject(0).getString("text")
         val cleaned = extractJson(content)
         val parsed = JSONObject(cleaned)
